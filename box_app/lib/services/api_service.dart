@@ -1,20 +1,32 @@
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  // Default: PC LAN IP (phone must be on same Wi‑Fi). If login times out from
+  // a physical device, allow TCP 8000 in Windows Firewall, or run:
+  //   adb reverse tcp:8000 tcp:8000
+  // then build/run with:
+  //   flutter run --dart-define=API_BASE=http://127.0.0.1:8000
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE',
+    defaultValue: 'http://192.168.1.7:8000',
+  );
   static String? _token;
 
   static Future<void> loadToken() async {
     final prefs = await SharedPreferences.getInstance();
     _token = prefs.getString('token');
+    debugPrint('Token loaded: $_token');
   }
 
   static Future<void> _saveToken(String token) async {
     _token = token;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
+    debugPrint('Token saved: $token');
   }
 
   static Future<void> clearToken() async {
@@ -35,14 +47,23 @@ class ApiService {
       };
 
   static Future<Map<String, dynamic>> _handleResponse(http.Response res) async {
-    final body = jsonDecode(res.body);
-    if (res.statusCode >= 200 && res.statusCode < 300) {
-      return body is Map<String, dynamic> ? body : {'data': body};
+    debugPrint('Response status: ${res.statusCode}');
+    debugPrint('Response body: ${res.body}');
+    try {
+      final body = jsonDecode(res.body);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        return body is Map<String, dynamic> ? body : {'data': body};
+      }
+      throw Exception(body['detail'] ?? 'Request failed with ${res.statusCode}');
+    } catch (e) {
+      debugPrint('Response decode error: $e');
+      rethrow;
     }
-    throw Exception(body['detail'] ?? 'Request failed');
   }
 
   static Future<List<dynamic>> _handleListResponse(http.Response res) async {
+    debugPrint('Response status: ${res.statusCode}');
+    debugPrint('Response body: ${res.body}');
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return jsonDecode(res.body) as List<dynamic>;
     }
@@ -52,8 +73,10 @@ class ApiService {
 
   // Auth
   static Future<Map<String, dynamic>> signup(String username, String password) async {
+    final url = '$baseUrl/auth/signup';
+    debugPrint('POST $url');
     final res = await http.post(
-      Uri.parse('$baseUrl/auth/signup'),
+      Uri.parse(url),
       headers: _jsonHeaders,
       body: jsonEncode({'username': username, 'password': password}),
     );
@@ -61,19 +84,36 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> login(String username, String password) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: 'username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}',
-    );
-    final data = await _handleResponse(res);
-    await _saveToken(data['access_token']);
-    return data;
+    final url = '$baseUrl/auth/login';
+    final body = 'username=${Uri.encodeComponent(username)}&password=${Uri.encodeComponent(password)}';
+    debugPrint('POST $url');
+    debugPrint('Body: $body');
+    debugPrint('Connecting to backend at: $baseUrl');
+    try {
+      final res = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: body,
+      ).timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('Connection timeout - Cannot reach backend at $baseUrl. Check if backend is running and IP is correct.');
+      });
+      final data = await _handleResponse(res);
+      await _saveToken(data['access_token']);
+      return data;
+    } on SocketException catch (e) {
+      debugPrint('Network error: $e');
+      throw Exception('Network error: Cannot connect to $baseUrl. Verify backend is running and device can reach this IP.');
+    } catch (e) {
+      debugPrint('Login request error: $e');
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> getMe() async {
+    final url = '$baseUrl/auth/me';
+    debugPrint('GET $url');
     final res = await http.get(
-      Uri.parse('$baseUrl/auth/me'),
+      Uri.parse(url),
       headers: _authHeaders,
     );
     return _handleResponse(res);

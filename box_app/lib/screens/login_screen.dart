@@ -13,23 +13,50 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
   bool _loading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    debugPrint('LoginScreen: initState called');
+  }
+
+  @override
+  void dispose() {
+    _username.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
   Future<void> _login() async {
-    if (_username.text.isEmpty || _password.text.isEmpty) {
+    debugPrint('LoginScreen: Login button pressed!');
+    final username = _username.text.trim();
+    final password = _password.text;
+    debugPrint('LoginScreen: Username: $username, Password length: ${password.length}');
+    
+    if (username.isEmpty || password.isEmpty) {
+      debugPrint('LoginScreen: Empty credentials!');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill in all fields')),
       );
       return;
     }
+    
     setState(() => _loading = true);
     try {
-      await ApiService.login(_username.text.trim(), _password.text);
+      debugPrint('LoginScreen: Attempting login for $username');
+      final response = await ApiService.login(username, password);
+      debugPrint('LoginScreen: Login response: $response');
+      
       final me = await ApiService.getMe();
+      debugPrint('LoginScreen: User data: $me');
+      
       if (!mounted) return;
       Navigator.pushReplacementNamed(
         context,
         me['is_admin'] == true ? '/admin' : '/dashboard',
       );
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('LoginScreen: Login error: $e');
+      debugPrint('LoginScreen: Stacktrace: $st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),

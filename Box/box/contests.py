@@ -9,6 +9,12 @@ from box.auth import get_current_user, get_current_admin
 router = APIRouter(prefix="/contests", tags=["Contests"])
 
 
+def _to_utc_naive(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 @router.post("/")
 def create_contest(contest: ContestCreate, admin: int = Depends(get_current_admin), db: Session = Depends(get_db)):
     movie = db.query(models.Movie).filter(models.Movie.id == contest.movie_id).first()
@@ -46,7 +52,7 @@ def join_contest(
     if not contest:
         raise HTTPException(status_code=404, detail="Contest not found")
 
-    if contest.deadline and datetime.now(timezone.utc) > contest.deadline:
+    if contest.deadline and _to_utc_naive(datetime.now(timezone.utc)) > _to_utc_naive(contest.deadline):
         raise HTTPException(status_code=400, detail="Contest entry closed")
 
     if amount < contest.entry_fee:

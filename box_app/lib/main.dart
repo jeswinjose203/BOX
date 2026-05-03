@@ -13,24 +13,13 @@ import 'screens/admin/manage_deposits_screen.dart';
 import 'screens/admin/manage_withdrawals_screen.dart';
 import 'screens/admin/scoring_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await ApiService.loadToken();
-  String initialRoute = '/login';
-  if (ApiService.isLoggedIn) {
-    try {
-      final me = await ApiService.getMe();
-      initialRoute = me['is_admin'] == true ? '/admin' : '/dashboard';
-    } catch (_) {
-      await ApiService.clearToken();
-    }
-  }
-  runApp(BoxOfficeApp(initialRoute: initialRoute));
+  runApp(const BoxOfficeApp());
 }
 
 class BoxOfficeApp extends StatelessWidget {
-  final String initialRoute;
-  const BoxOfficeApp({super.key, required this.initialRoute});
+  const BoxOfficeApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -45,12 +34,12 @@ class BoxOfficeApp extends StatelessWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 2,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
-      initialRoute: initialRoute,
+      home: const StartupScreen(),
       routes: {
         '/login': (_) => const LoginScreen(),
         '/signup': (_) => const SignupScreen(),
@@ -73,6 +62,52 @@ class BoxOfficeApp extends StatelessWidget {
         }
         return null;
       },
+    );
+  }
+}
+
+class StartupScreen extends StatefulWidget {
+  const StartupScreen({super.key});
+
+  @override
+  State<StartupScreen> createState() => _StartupScreenState();
+}
+
+class _StartupScreenState extends State<StartupScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    await ApiService.loadToken();
+    String route = '/login';
+    if (ApiService.isLoggedIn) {
+      try {
+        final me = await ApiService.getMe();
+        route = me['is_admin'] == true ? '/admin' : '/dashboard';
+      } catch (_) {
+        await ApiService.clearToken();
+      }
+    }
+    if (!mounted) return;
+    Navigator.pushReplacementNamed(context, route);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading...'),
+          ],
+        ),
+      ),
     );
   }
 }
