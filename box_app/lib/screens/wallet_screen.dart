@@ -11,10 +11,14 @@ class WalletScreen extends StatefulWidget {
 class _WalletScreenState extends State<WalletScreen> {
   String _balance = '...';
   List<dynamic> _deposits = [];
+  List<dynamic> _withdrawals = [];
   bool _loading = true;
-  bool _submitting = false;
-  final _amountCtrl = TextEditingController();
+  bool _submittingDeposit = false;
+  bool _submittingWithdrawal = false;
+  final _depositAmountCtrl = TextEditingController();
   final _utrCtrl = TextEditingController();
+  final _withdrawAmountCtrl = TextEditingController();
+  final _upiCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -25,11 +29,16 @@ class _WalletScreenState extends State<WalletScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final results = await Future.wait([ApiService.getBalance(), ApiService.getMyDeposits()]);
+      final results = await Future.wait([
+        ApiService.getBalance(),
+        ApiService.getMyDeposits(),
+        ApiService.getMyWithdrawals(),
+      ]);
       if (!mounted) return;
       setState(() {
         _balance = (results[0] as Map)['balance']?.toString() ?? '0';
         _deposits = results[1] as List;
+        _withdrawals = results[2] as List;
         _loading = false;
       });
     } catch (e) {
@@ -42,17 +51,17 @@ class _WalletScreenState extends State<WalletScreen> {
   }
 
   Future<void> _requestDeposit() async {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = double.tryParse(_depositAmountCtrl.text);
     if (amount == null || _utrCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter valid amount and UTR')),
       );
       return;
     }
-    setState(() => _submitting = true);
+    setState(() => _submittingDeposit = true);
     try {
       await ApiService.requestDeposit(amount, _utrCtrl.text.trim());
-      _amountCtrl.clear();
+      _depositAmountCtrl.clear();
       _utrCtrl.clear();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deposit requested!')));
@@ -63,7 +72,33 @@ class _WalletScreenState extends State<WalletScreen> {
         SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
       );
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _submittingDeposit = false);
+    }
+  }
+
+  Future<void> _requestWithdrawal() async {
+    final amount = double.tryParse(_withdrawAmountCtrl.text);
+    if (amount == null || _upiCtrl.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter valid amount and UPI ID')),
+      );
+      return;
+    }
+    setState(() => _submittingWithdrawal = true);
+    try {
+      await ApiService.requestWithdrawal(amount, _upiCtrl.text.trim());
+      _withdrawAmountCtrl.clear();
+      _upiCtrl.clear();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Withdrawal requested!')));
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _submittingWithdrawal = false);
     }
   }
 
@@ -103,10 +138,11 @@ class _WalletScreenState extends State<WalletScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
+                  // Deposit section
                   Text('Request Deposit', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
                   TextField(
-                    controller: _amountCtrl,
+                    controller: _depositAmountCtrl,
                     decoration: const InputDecoration(labelText: 'Amount (₹)'),
                     keyboardType: TextInputType.number,
                   ),
@@ -117,12 +153,34 @@ class _WalletScreenState extends State<WalletScreen> {
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: _submitting ? null : _requestDeposit,
-                    child: _submitting
+                    onPressed: _submittingDeposit ? null : _requestDeposit,
+                    child: _submittingDeposit
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Submit Deposit Request'),
                   ),
                   const SizedBox(height: 24),
+                  // Withdrawal section
+                  Text('Request Withdrawal', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _withdrawAmountCtrl,
+                    decoration: const InputDecoration(labelText: 'Amount (₹)'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _upiCtrl,
+                    decoration: const InputDecoration(labelText: 'UPI ID'),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _submittingWithdrawal ? null : _requestWithdrawal,
+                    child: _submittingWithdrawal
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('Submit Withdrawal Request'),
+                  ),
+                  const SizedBox(height: 24),
+                  // Deposit history
                   Text('My Deposits', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
                   if (_deposits.isEmpty) const Text('No deposits yet'),
@@ -133,6 +191,21 @@ class _WalletScreenState extends State<WalletScreen> {
                           trailing: Chip(
                             label: Text(d['status'] ?? 'PENDING', style: const TextStyle(color: Colors.white, fontSize: 12)),
                             backgroundColor: _statusColor(d['status'] ?? 'PENDING'),
+                          ),
+                        ),
+                      )),
+                  const SizedBox(height: 24),
+                  // Withdrawal history
+                  Text('My Withdrawals', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  if (_withdrawals.isEmpty) const Text('No withdrawals yet'),
+                  ..._withdrawals.map((w) => Card(
+                        child: ListTile(
+                          title: Text('₹${w['amount']}'),
+                          subtitle: Text('UPI: ${w['upi_id']}'),
+                          trailing: Chip(
+                            label: Text(w['status'] ?? 'PENDING', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                            backgroundColor: _statusColor(w['status'] ?? 'PENDING'),
                           ),
                         ),
                       )),

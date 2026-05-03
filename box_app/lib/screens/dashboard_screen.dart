@@ -80,12 +80,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       itemCount: _contests.length,
                       itemBuilder: (ctx, i) {
                         final c = _contests[i];
+                        final completed = c['is_distributed'] == true;
                         return Card(
                           child: ListTile(
-                            leading: const CircleAvatar(child: Icon(Icons.emoji_events)),
+                            leading: CircleAvatar(
+                              backgroundColor: completed ? Colors.grey : null,
+                              child: Icon(completed ? Icons.check_circle : Icons.emoji_events),
+                            ),
                             title: Text(_movieTitle(c['movie_id'])),
                             subtitle: Text(
-                              'Fee: ₹${c['entry_fee']}  •  Type: ${c['type']}\nDeadline: ${c['deadline'] ?? 'N/A'}',
+                              '${completed ? '✅ Completed\n' : ''}Fee: ₹${c['entry_fee']}  •  Type: ${c['type']}\nDeadline: ${c['deadline'] ?? 'N/A'}',
                             ),
                             isThreeLine: true,
                             trailing: const Icon(Icons.chevron_right),

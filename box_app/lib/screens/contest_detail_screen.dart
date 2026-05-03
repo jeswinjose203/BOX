@@ -17,6 +17,7 @@ class _ContestDetailScreenState extends State<ContestDetailScreen> {
   bool _joined = false;
   bool _predicted = false;
   final _predictionCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
   int? _myUserId;
 
   @override
@@ -58,8 +59,17 @@ class _ContestDetailScreenState extends State<ContestDetailScreen> {
   }
 
   Future<void> _join() async {
+    final entryFee = (_contest!['entry_fee'] as num).toDouble();
+    final amount = double.tryParse(_amountCtrl.text);
+    if (amount == null || amount < entryFee) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Minimum amount is ₹$entryFee')),
+      );
+      return;
+    }
     try {
-      await ApiService.joinContest(widget.contestId);
+      await ApiService.joinContest(widget.contestId, amount);
+      _amountCtrl.clear();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined!')));
       _load();
@@ -115,18 +125,44 @@ class _ContestDetailScreenState extends State<ContestDetailScreen> {
                               Text('Type: ${_contest!['type']}'),
                               Text('Entry Fee: ₹${_contest!['entry_fee']}'),
                               Text('Deadline: ${_contest!['deadline'] ?? 'N/A'}'),
+                              if (_contest!['is_distributed'] == true)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Chip(
+                                    avatar: const Icon(Icons.check_circle, color: Colors.white, size: 18),
+                                    label: const Text('Completed', style: TextStyle(color: Colors.white)),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                ),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                      if (!_joined)
-                        FilledButton.icon(
-                          onPressed: _join,
-                          icon: const Icon(Icons.add),
-                          label: const Text('Join Contest'),
+                      if (_contest!['is_distributed'] != true && !_joined) ...[
+                        Text('Stake Amount', style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 4),
+                        Text('Minimum: ₹${_contest!['entry_fee']}', style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _amountCtrl,
+                                decoration: const InputDecoration(labelText: 'Amount (₹)'),
+                                keyboardType: TextInputType.number,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton.icon(
+                              onPressed: _join,
+                              icon: const Icon(Icons.add),
+                              label: const Text('Join'),
+                            ),
+                          ],
                         ),
-                      if (_joined && !_predicted) ...[
+                      ],
+                      if (_contest!['is_distributed'] != true && _joined && !_predicted) ...[
                         Text('Submit Prediction', style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
                         Row(

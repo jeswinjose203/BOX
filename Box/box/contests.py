@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from box.database import get_db
 from box import models
@@ -38,6 +38,7 @@ def get_contest(contest_id: int, db: Session = Depends(get_db)):
 @router.post("/{contest_id}/join")
 def join_contest(
     contest_id: int,
+    amount: float = Body(..., embed=True),
     user_id: int = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -47,6 +48,9 @@ def join_contest(
 
     if contest.deadline and datetime.now(timezone.utc) > contest.deadline:
         raise HTTPException(status_code=400, detail="Contest entry closed")
+
+    if amount < contest.entry_fee:
+        raise HTTPException(status_code=400, detail=f"Minimum amount is ₹{contest.entry_fee}")
 
     existing = db.query(models.Participant).filter(
         models.Participant.user_id == user_id,
@@ -60,19 +64,19 @@ def join_contest(
     ).all()
     balance = sum(t.amount for t in transactions)
 
-    if balance < contest.entry_fee:
+    if balance < amount:
         raise HTTPException(status_code=400, detail="Insufficient balance")
 
     try:
         transaction = models.WalletTransaction(
             user_id=user_id,
-            amount=-contest.entry_fee,
+            amount=-amount,
             type="contest_fee",
             reference_id=contest_id
         )
         db.add(transaction)
 
-        participant = models.Participant(user_id=user_id, contest_id=contest_id)
+        participant = models.Participant(user_id=user_id, contest_id=contest_id, amount=amount)
         db.add(participant)
         db.commit()
     except Exception:
@@ -81,5 +85,6 @@ def join_contest(
 
     return {
         "message": "Joined contest successfully",
-        "remaining_balance": balance - contest.entry_fee
+        "amount_staked": amount,
+        "remaining_balance": balance - amount
     }

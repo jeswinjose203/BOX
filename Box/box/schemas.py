@@ -25,6 +25,11 @@ class DepositRequest(BaseModel):
     utr: str
 
 
+class WithdrawalRequest(BaseModel):
+    amount: float
+    upi_id: str
+
+
 class SignupRequest(BaseModel):
     username: str
     password: str
@@ -33,3 +38,8 @@ class SignupRequest(BaseModel):
 class ScoringRequest(BaseModel):
     contest_id: int
     actual_value: float
+
+
+class DistributeRequest(BaseModel):
+    contest_id: int
+    top_n: int

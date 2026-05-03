@@ -119,10 +119,11 @@ class ApiService {
     return _handleResponse(res);
   }
 
-  static Future<Map<String, dynamic>> joinContest(int id) async {
+  static Future<Map<String, dynamic>> joinContest(int id, double amount) async {
     final res = await http.post(
       Uri.parse('$baseUrl/contests/$id/join'),
       headers: _authHeaders,
+      body: jsonEncode({'amount': amount}),
     );
     return _handleResponse(res);
   }
@@ -151,6 +152,15 @@ class ApiService {
       Uri.parse('$baseUrl/scoring/run'),
       headers: _authHeaders,
       body: jsonEncode({'contest_id': contestId, 'actual_value': actualValue}),
+    );
+    return _handleResponse(res);
+  }
+
+  static Future<Map<String, dynamic>> distributePrizes(int contestId, int topN) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/scoring/distribute'),
+      headers: _authHeaders,
+      body: jsonEncode({'contest_id': contestId, 'top_n': topN}),
     );
     return _handleResponse(res);
   }
@@ -206,6 +216,48 @@ class ApiService {
   static Future<Map<String, dynamic>> rejectDeposit(int id) async {
     final res = await http.post(
       Uri.parse('$baseUrl/deposits/reject/$id'),
+      headers: _authHeaders,
+    );
+    return _handleResponse(res);
+  }
+
+  // Withdrawals
+  static Future<Map<String, dynamic>> requestWithdrawal(double amount, String upiId) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/withdrawals/request'),
+      headers: _authHeaders,
+      body: jsonEncode({'amount': amount, 'upi_id': upiId}),
+    );
+    return _handleResponse(res);
+  }
+
+  static Future<List<dynamic>> getMyWithdrawals() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/withdrawals/mine'),
+      headers: _authHeaders,
+    );
+    return _handleListResponse(res);
+  }
+
+  static Future<List<dynamic>> getAllWithdrawals() async {
+    final res = await http.get(
+      Uri.parse('$baseUrl/withdrawals/'),
+      headers: _authHeaders,
+    );
+    return _handleListResponse(res);
+  }
+
+  static Future<Map<String, dynamic>> approveWithdrawal(int id) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/withdrawals/approve/$id'),
+      headers: _authHeaders,
+    );
+    return _handleResponse(res);
+  }
+
+  static Future<Map<String, dynamic>> rejectWithdrawal(int id) async {
+    final res = await http.post(
+      Uri.parse('$baseUrl/withdrawals/reject/$id'),
       headers: _authHeaders,
     );
     return _handleResponse(res);

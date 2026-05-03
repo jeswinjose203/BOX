@@ -10,6 +10,7 @@ class AdminDashboardScreen extends StatelessWidget {
       {'icon': Icons.movie, 'label': 'Manage Movies', 'route': '/admin/movies'},
       {'icon': Icons.emoji_events, 'label': 'Manage Contests', 'route': '/admin/contests'},
       {'icon': Icons.payments, 'label': 'Manage Deposits', 'route': '/admin/deposits'},
+      {'icon': Icons.money_off, 'label': 'Manage Withdrawals', 'route': '/admin/withdrawals'},
       {'icon': Icons.scoreboard, 'label': 'Run Scoring', 'route': '/admin/scoring'},
     ];
 

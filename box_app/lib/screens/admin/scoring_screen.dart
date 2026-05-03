@@ -12,9 +12,12 @@ class _ScoringScreenState extends State<ScoringScreen> {
   List<dynamic> _contests = [];
   List<dynamic> _leaderboard = [];
   int? _selectedContestId;
+  bool? _isDistributed;
   final _actualCtrl = TextEditingController();
+  final _topNCtrl = TextEditingController(text: '3');
   bool _loading = true;
   bool _running = false;
+  bool _distributing = false;
 
   @override
   void initState() {
@@ -47,10 +50,9 @@ class _ScoringScreenState extends State<ScoringScreen> {
     setState(() => _running = true);
     try {
       await ApiService.runScoring(_selectedContestId!, val);
-      final lb = await ApiService.getLeaderboard(_selectedContestId!);
+      await _loadLeaderboard();
       if (!mounted) return;
-      setState(() => _leaderboard = lb);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Scoring complete!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Leaderboard generated!')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -61,6 +63,31 @@ class _ScoringScreenState extends State<ScoringScreen> {
     }
   }
 
+  Future<void> _distribute() async {
+    final topN = int.tryParse(_topNCtrl.text);
+    if (_selectedContestId == null || topN == null || topN < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid number of winners')),
+      );
+      return;
+    }
+    setState(() => _distributing = true);
+    try {
+      await ApiService.distributePrizes(_selectedContestId!, topN);
+      if (!mounted) return;
+      setState(() => _isDistributed = true);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Prizes distributed!')));
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+      );
+    } finally {
+      if (mounted) setState(() => _distributing = false);
+    }
+  }
+
   Future<void> _loadLeaderboard() async {
     if (_selectedContestId == null) return;
     try {
@@ -68,6 +95,19 @@ class _ScoringScreenState extends State<ScoringScreen> {
       if (mounted) setState(() => _leaderboard = lb);
     } catch (_) {
       if (mounted) setState(() => _leaderboard = []);
+    }
+  }
+
+  void _onContestSelected(int? id) {
+    setState(() {
+      _selectedContestId = id;
+      _leaderboard = [];
+      _isDistributed = null;
+    });
+    if (id != null) {
+      final contest = _contests.cast<Map>().where((c) => c['id'] == id).firstOrNull;
+      _isDistributed = contest?['is_distributed'] == true;
+      _loadLeaderboard();
     }
   }
 
@@ -84,17 +124,17 @@ class _ScoringScreenState extends State<ScoringScreen> {
                   value: _selectedContestId,
                   decoration: const InputDecoration(labelText: 'Select Contest'),
                   items: _contests.map<DropdownMenuItem<int>>((c) {
-                    return DropdownMenuItem(value: c['id'] as int, child: Text('Contest #${c['id']} (${c['type']})'));
+                    final distributed = c['is_distributed'] == true;
+                    return DropdownMenuItem(
+                      value: c['id'] as int,
+                      child: Text('Contest #${c['id']} (${c['type']})${distributed ? ' ✅' : ''}'),
+                    );
                   }).toList(),
-                  onChanged: (v) {
-                    setState(() {
-                      _selectedContestId = v;
-                      _leaderboard = [];
-                    });
-                    _loadLeaderboard();
-                  },
+                  onChanged: _onContestSelected,
                 ),
                 const SizedBox(height: 12),
+                Text('Step 1: Generate Leaderboard', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
                 TextField(
                   controller: _actualCtrl,
                   decoration: const InputDecoration(labelText: 'Actual Value (₹ Cr)'),
@@ -116,6 +156,7 @@ class _ScoringScreenState extends State<ScoringScreen> {
                     columns: const [
                       DataColumn(label: Text('Rank')),
                       DataColumn(label: Text('User')),
+                      DataColumn(label: Text('Predicted')),
                       DataColumn(label: Text('Score')),
                     ],
                     rows: _leaderboard.asMap().entries.map((e) {
@@ -123,10 +164,39 @@ class _ScoringScreenState extends State<ScoringScreen> {
                       return DataRow(cells: [
                         DataCell(Text('${e.key + 1}')),
                         DataCell(Text(lb['username']?.toString() ?? 'User ${lb['user_id']}')),
+                        DataCell(Text('₹${lb['predicted_value']} Cr')),
                         DataCell(Text(lb['score']?.toString() ?? '-')),
                       ]);
                     }).toList(),
                   ),
+                  const SizedBox(height: 24),
+                  if (_isDistributed == true)
+                    const Card(
+                      child: ListTile(
+                        leading: Icon(Icons.check_circle, color: Colors.green),
+                        title: Text('Prizes already distributed'),
+                      ),
+                    )
+                  else ...[
+                    Text('Step 2: Distribute Prizes', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _topNCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Top N Winners',
+                        helperText: '${_leaderboard.length} participants in leaderboard',
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.icon(
+                      onPressed: _distributing ? null : _distribute,
+                      icon: _distributing
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.payments),
+                      label: const Text('Distribute Prizes'),
+                    ),
+                  ],
                 ],
               ],
             ),

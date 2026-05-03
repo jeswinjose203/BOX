@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'services/api_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/dashboard_screen.dart';
@@ -9,12 +10,27 @@ import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/manage_movies_screen.dart';
 import 'screens/admin/manage_contests_screen.dart';
 import 'screens/admin/manage_deposits_screen.dart';
+import 'screens/admin/manage_withdrawals_screen.dart';
 import 'screens/admin/scoring_screen.dart';
 
-void main() => runApp(const BoxOfficeApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await ApiService.loadToken();
+  String initialRoute = '/login';
+  if (ApiService.isLoggedIn) {
+    try {
+      final me = await ApiService.getMe();
+      initialRoute = me['is_admin'] == true ? '/admin' : '/dashboard';
+    } catch (_) {
+      await ApiService.clearToken();
+    }
+  }
+  runApp(BoxOfficeApp(initialRoute: initialRoute));
+}
 
 class BoxOfficeApp extends StatelessWidget {
-  const BoxOfficeApp({super.key});
+  final String initialRoute;
+  const BoxOfficeApp({super.key, required this.initialRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +50,7 @@ class BoxOfficeApp extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       ),
-      initialRoute: '/login',
+      initialRoute: initialRoute,
       routes: {
         '/login': (_) => const LoginScreen(),
         '/signup': (_) => const SignupScreen(),
@@ -45,6 +61,7 @@ class BoxOfficeApp extends StatelessWidget {
         '/admin/movies': (_) => const ManageMoviesScreen(),
         '/admin/contests': (_) => const ManageContestsScreen(),
         '/admin/deposits': (_) => const ManageDepositsScreen(),
+        '/admin/withdrawals': (_) => const ManageWithdrawalsScreen(),
         '/admin/scoring': (_) => const ScoringScreen(),
       },
       onGenerateRoute: (settings) {

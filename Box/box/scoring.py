@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from box.database import get_db
 from box import models
-from box.schemas import ScoringRequest
+from box.schemas import ScoringRequest, DistributeRequest
 from box.auth import get_current_admin
 
 router = APIRouter(prefix="/scoring", tags=["Scoring"])
@@ -20,9 +20,6 @@ def run_scoring(data: ScoringRequest, admin: int = Depends(get_current_admin), d
     contest = db.query(models.Contest).filter(models.Contest.id == data.contest_id).first()
     if not contest:
         raise HTTPException(status_code=404, detail="Contest not found")
-
-    if contest.is_distributed:
-        raise HTTPException(status_code=400, detail="Prizes already distributed")
 
     predictions = db.query(models.Prediction).filter(
         models.Prediction.contest_id == data.contest_id
@@ -57,11 +54,48 @@ def run_scoring(data: ScoringRequest, admin: int = Depends(get_current_admin), d
         )
         db.add(db_entry)
 
-    distribute_prizes(data.contest_id, db)
+    db.commit()
+    return {"message": "Leaderboard generated", "total_entries": len(leaderboard)}
+
+
+@router.post("/distribute")
+def distribute(data: DistributeRequest, admin: int = Depends(get_current_admin), db: Session = Depends(get_db)):
+    contest = db.query(models.Contest).filter(models.Contest.id == data.contest_id).first()
+    if not contest:
+        raise HTTPException(status_code=404, detail="Contest not found")
+
+    if contest.is_distributed:
+        raise HTTPException(status_code=400, detail="Prizes already distributed")
+
+    leaderboard = db.query(models.Leaderboard).filter(
+        models.Leaderboard.contest_id == data.contest_id
+    ).order_by(models.Leaderboard.rank).all()
+    if not leaderboard:
+        raise HTTPException(status_code=400, detail="Run scoring first")
+
+    participants = db.query(models.Participant).filter(
+        models.Participant.contest_id == data.contest_id
+    ).all()
+
+    total_pool = sum(p.amount for p in participants)
+    winner_count = min(data.top_n, len(leaderboard))
+    weights = list(range(winner_count, 0, -1))
+    total_weight = sum(weights)
+
+    for i in range(winner_count):
+        winner = leaderboard[i]
+        prize_amount = round(total_pool * weights[i] / total_weight, 2)
+        transaction = models.WalletTransaction(
+            user_id=winner.user_id,
+            amount=prize_amount,
+            type="reward",
+            reference_id=data.contest_id
+        )
+        db.add(transaction)
+
     contest.is_distributed = True
     db.commit()
-
-    return {"message": "Leaderboard generated & prizes distributed"}
+    return {"message": f"Prizes distributed to top {winner_count}", "total_pool": total_pool}
 
 
 @router.get("/leaderboard/{contest_id}")
@@ -69,30 +103,3 @@ def get_leaderboard(contest_id: int, db: Session = Depends(get_db)):
     return db.query(models.Leaderboard).filter(
         models.Leaderboard.contest_id == contest_id
     ).order_by(models.Leaderboard.rank).all()
-
-
-def distribute_prizes(contest_id: int, db: Session):
-    leaderboard = db.query(models.Leaderboard).filter(
-        models.Leaderboard.contest_id == contest_id
-    ).order_by(models.Leaderboard.rank).all()
-    if not leaderboard:
-        return
-
-    contest = db.query(models.Contest).filter(models.Contest.id == contest_id).first()
-    total_players = db.query(models.Participant).filter(
-        models.Participant.contest_id == contest_id
-    ).count()
-
-    total_pool = total_players * contest.entry_fee
-    prizes = [0.6, 0.3, 0.1]
-
-    for i in range(min(3, len(leaderboard))):
-        winner = leaderboard[i]
-        prize_amount = total_pool * prizes[i]
-        transaction = models.WalletTransaction(
-            user_id=winner.user_id,
-            amount=prize_amount,
-            type="reward",
-            reference_id=contest_id
-        )
-        db.add(transaction)

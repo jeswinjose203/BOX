@@ -57,6 +57,7 @@ class Participant(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer)
     contest_id = Column(Integer, ForeignKey("contests.id"))
+    amount = Column(Float)
 
 
 class User(Base):
@@ -75,6 +76,17 @@ class Deposit(Base):
     user_id = Column(Integer, index=True)
     amount = Column(Float)
     utr = Column(String, unique=True, index=True)
+    status = Column(String, default="PENDING")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Withdrawal(Base):
+    __tablename__ = "withdrawals"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    amount = Column(Float)
+    upi_id = Column(String)
     status = Column(String, default="PENDING")
     created_at = Column(DateTime, default=datetime.utcnow)
 
