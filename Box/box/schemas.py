@@ -15,6 +15,11 @@ class ContestCreate(BaseModel):
     deadline: Optional[datetime] = None
 
 
+class ContestJoinRequest(BaseModel):
+    amount: float
+    predicted_value: Optional[float] = None
+
+
 class PredictionCreate(BaseModel):
     contest_id: int
     predicted_value: float

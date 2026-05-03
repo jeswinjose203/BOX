@@ -61,17 +61,27 @@ class _ContestDetailScreenState extends State<ContestDetailScreen> {
   Future<void> _join() async {
     final entryFee = (_contest!['entry_fee'] as num).toDouble();
     final amount = double.tryParse(_amountCtrl.text);
+    final predictedValue = double.tryParse(_predictionCtrl.text);
     if (amount == null || amount < entryFee) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Minimum amount is ₹$entryFee')),
       );
       return;
     }
+    if (predictedValue == null || predictedValue < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a valid predicted value (>= 0)')),
+      );
+      return;
+    }
     try {
-      await ApiService.joinContest(widget.contestId, amount);
+      await ApiService.joinContest(widget.contestId, amount, predictedValue);
       _amountCtrl.clear();
+      _predictionCtrl.clear();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined!')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Joined and prediction submitted!')),
+      );
       _load();
     } catch (e) {
       if (!mounted) return;
@@ -140,24 +150,28 @@ class _ContestDetailScreenState extends State<ContestDetailScreen> {
                       ),
                       const SizedBox(height: 16),
                       if (_contest!['is_distributed'] != true && !_joined) ...[
-                        Text('Stake Amount', style: Theme.of(context).textTheme.titleMedium),
+                        Text('Join Contest', style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 4),
                         Text('Minimum: ₹${_contest!['entry_fee']}', style: Theme.of(context).textTheme.bodySmall),
                         const SizedBox(height: 8),
+                        TextField(
+                          controller: _amountCtrl,
+                          decoration: const InputDecoration(labelText: 'Amount (₹)'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _predictionCtrl,
+                          decoration: const InputDecoration(labelText: 'Predicted Box Office (₹ Cr)'),
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _amountCtrl,
-                                decoration: const InputDecoration(labelText: 'Amount (₹)'),
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
                             FilledButton.icon(
                               onPressed: _join,
                               icon: const Icon(Icons.add),
-                              label: const Text('Join'),
+                              label: const Text('Join & Predict'),
                             ),
                           ],
                         ),

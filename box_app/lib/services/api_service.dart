@@ -159,11 +159,11 @@ class ApiService {
     return _handleResponse(res);
   }
 
-  static Future<Map<String, dynamic>> joinContest(int id, double amount) async {
+  static Future<Map<String, dynamic>> joinContest(int id, double amount, double predictedValue) async {
     final res = await http.post(
       Uri.parse('$baseUrl/contests/$id/join'),
       headers: _authHeaders,
-      body: jsonEncode({'amount': amount}),
+      body: jsonEncode({'amount': amount, 'predicted_value': predictedValue}),
     );
     return _handleResponse(res);
   }
